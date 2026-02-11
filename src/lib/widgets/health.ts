@@ -4,6 +4,94 @@ import type {
   WidgetData,
   NotificationPayload,
 } from "./types";
+import { getToken, isTokenExpired } from "@/lib/auth/oauth-tokens";
+
+// ─── Oura Ring API v2 ───────────────────────────────────────────────────────
+
+async function fetchOuraData(accessToken: string) {
+  const today = new Date().toISOString().split("T")[0];
+  const params = `start_date=${today}&end_date=${today}`;
+
+  const [sleepRes, readinessRes, activityRes] = await Promise.allSettled([
+    fetch(`https://api.ouraring.com/v2/usercollection/daily_sleep?${params}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }),
+    fetch(
+      `https://api.ouraring.com/v2/usercollection/daily_readiness?${params}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    ),
+    fetch(
+      `https://api.ouraring.com/v2/usercollection/daily_activity?${params}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+    ),
+  ]);
+
+  let sleepScore: number | null = null;
+  let readinessScore: number | null = null;
+  let steps: number | null = null;
+
+  if (sleepRes.status === "fulfilled" && sleepRes.value.ok) {
+    const data = await sleepRes.value.json();
+    if (data.data?.length > 0) {
+      sleepScore = data.data[0].score ?? null;
+    }
+  }
+
+  if (readinessRes.status === "fulfilled" && readinessRes.value.ok) {
+    const data = await readinessRes.value.json();
+    if (data.data?.length > 0) {
+      readinessScore = data.data[0].score ?? null;
+    }
+  }
+
+  if (activityRes.status === "fulfilled" && activityRes.value.ok) {
+    const data = await activityRes.value.json();
+    if (data.data?.length > 0) {
+      steps = data.data[0].steps ?? null;
+    }
+  }
+
+  return { sleepScore, readinessScore, steps };
+}
+
+// ─── Terra API (Apple HealthKit) ────────────────────────────────────────────
+
+async function fetchTerraData(userId: string) {
+  const terraApiKey = process.env.TERRA_API_KEY;
+  const terraDevId = process.env.TERRA_DEV_ID;
+
+  if (!terraApiKey || !terraDevId) return null;
+
+  const today = new Date().toISOString().split("T")[0];
+
+  try {
+    const res = await fetch(
+      `https://api.tryterra.co/v2/daily?user_id=${userId}&start_date=${today}&end_date=${today}`,
+      {
+        headers: {
+          "X-API-Key": terraApiKey,
+          "dev-id": terraDevId,
+        },
+      },
+    );
+
+    if (!res.ok) return null;
+
+    const data = await res.json();
+    if (!data.data?.length) return null;
+
+    const day = data.data[0];
+    return {
+      sleepScore: day.sleep_data?.overall_score ?? null,
+      steps: day.distance_data?.steps ?? null,
+      readinessScore: null, // Apple Health doesn't have readiness
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ─── Widget ─────────────────────────────────────────────────────────────────
 
 export const healthWidget: Widget = {
   metadata: {
@@ -30,40 +118,71 @@ export const healthWidget: Widget = {
       return {
         widgetId: "health",
         fetchedAt: new Date(),
-        data: { connected: false },
+        data: {
+          connected: false,
+          sleepScore: null,
+          readinessScore: null,
+          steps: null,
+        },
       };
     }
 
     const source = (config.source as string) || "oura";
 
-    // TODO: Implement Oura Ring API v2 fetcher
-    // Endpoints: /v2/usercollection/daily_sleep, daily_readiness, daily_activity
-    // Requires OAuth2 token from oauth_tokens table
-
-    // TODO: Implement Terra API for Apple HealthKit
-    // Requires Terra API key and user token
-
     try {
-      // Placeholder data structure — will be populated when OAuth flows are connected
+      let sleepScore: number | null = null;
+      let readinessScore: number | null = null;
+      let steps: number | null = null;
+      let hasConnection = false;
+
+      // Fetch from Oura if configured
+      if (source === "oura" || source === "both") {
+        const ouraToken = await getToken(userId, "oura");
+        if (ouraToken && !isTokenExpired(ouraToken.expiresAt)) {
+          hasConnection = true;
+          const ouraData = await fetchOuraData(ouraToken.accessToken);
+          sleepScore = ouraData.sleepScore;
+          readinessScore = ouraData.readinessScore;
+          steps = ouraData.steps;
+        }
+      }
+
+      // Fetch from Terra (Apple HealthKit) if configured
+      if (source === "apple_health" || source === "both") {
+        const terraToken = await getToken(userId, "terra");
+        if (terraToken) {
+          hasConnection = true;
+          const terraData = await fetchTerraData(terraToken.accessToken);
+          if (terraData) {
+            // Merge: prefer Oura scores, use Terra as fallback
+            sleepScore = sleepScore ?? terraData.sleepScore;
+            steps = steps ?? terraData.steps;
+            readinessScore = readinessScore ?? terraData.readinessScore;
+          }
+        }
+      }
+
       return {
         widgetId: "health",
         fetchedAt: new Date(),
         data: {
-          connected: false,
+          connected: hasConnection,
           source,
-          sleepScore: null,
-          readinessScore: null,
-          steps: null,
-          hrv: null,
-          activeCalories: null,
-          sleepDuration: null,
+          sleepScore,
+          readinessScore,
+          steps,
         },
       };
     } catch (error) {
       return {
         widgetId: "health",
         fetchedAt: new Date(),
-        data: { connected: true },
+        data: {
+          connected: true,
+          sleepScore: null,
+          readinessScore: null,
+          steps: null,
+        },
         error:
           error instanceof Error
             ? error.message

@@ -4,6 +4,7 @@ import type {
   WidgetData,
   NotificationPayload,
 } from "./types";
+import { getToken, isTokenExpired } from "@/lib/auth/oauth-tokens";
 
 interface CalendarEvent {
   id: string;
@@ -12,9 +13,101 @@ interface CalendarEvent {
   endTime: string;
   location?: string;
   source: "google" | "outlook";
-  color: string;
   isAllDay: boolean;
 }
+
+// ─── Google Calendar API ────────────────────────────────────────────────────
+
+async function fetchGoogleCalendarEvents(
+  accessToken: string,
+): Promise<CalendarEvent[]> {
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
+
+  const params = new URLSearchParams({
+    timeMin: startOfDay.toISOString(),
+    timeMax: endOfDay.toISOString(),
+    singleEvents: "true",
+    orderBy: "startTime",
+    maxResults: "20",
+  });
+
+  const res = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params}`,
+    {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    },
+  );
+
+  if (!res.ok) {
+    console.error("Google Calendar API error:", res.status);
+    return [];
+  }
+
+  const data = await res.json();
+  return (data.items || []).map(
+    (item: {
+      id: string;
+      summary?: string;
+      start: { dateTime?: string; date?: string };
+      end: { dateTime?: string; date?: string };
+      location?: string;
+    }) => ({
+      id: item.id,
+      title: item.summary || "(No title)",
+      startTime: item.start.dateTime || item.start.date || "",
+      endTime: item.end.dateTime || item.end.date || "",
+      location: item.location,
+      source: "google" as const,
+      isAllDay: !item.start.dateTime,
+    }),
+  );
+}
+
+// ─── Microsoft Graph (Outlook) API ──────────────────────────────────────────
+
+async function fetchOutlookCalendarEvents(
+  accessToken: string,
+): Promise<CalendarEvent[]> {
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
+
+  const res = await fetch(
+    `https://graph.microsoft.com/v1.0/me/calendarview?startDateTime=${startOfDay.toISOString()}&endDateTime=${endOfDay.toISOString()}&$orderby=start/dateTime&$top=20`,
+    {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    },
+  );
+
+  if (!res.ok) {
+    console.error("Outlook Calendar API error:", res.status);
+    return [];
+  }
+
+  const data = await res.json();
+  return (data.value || []).map(
+    (item: {
+      id: string;
+      subject?: string;
+      start: { dateTime: string };
+      end: { dateTime: string };
+      location?: { displayName?: string };
+      isAllDay: boolean;
+    }) => ({
+      id: item.id,
+      title: item.subject || "(No title)",
+      startTime: item.start.dateTime,
+      endTime: item.end.dateTime,
+      location: item.location?.displayName || undefined,
+      source: "outlook" as const,
+      isAllDay: item.isAllDay,
+    }),
+  );
+}
+
+// ─── Widget ─────────────────────────────────────────────────────────────────
 
 export const calendarWidget: Widget = {
   metadata: {
@@ -32,23 +125,39 @@ export const calendarWidget: Widget = {
   },
 
   async fetchData(config: WidgetConfig, userId?: string): Promise<WidgetData> {
-    // Calendar requires OAuth tokens — fetch from connected providers
-    // This will be implemented when OAuth flows are connected
     if (!userId) {
       return {
         widgetId: "calendar",
         fetchedAt: new Date(),
-        data: { events: [], connected: false },
+        data: { events: [], connected: false, eventCount: 0 },
       };
     }
 
     try {
       const events: CalendarEvent[] = [];
+      let hasAnyConnection = false;
 
-      // TODO: Fetch from Google Calendar API using stored OAuth tokens
-      // TODO: Fetch from Microsoft Graph API using stored OAuth tokens
-      // TODO: Merge, sort chronologically, detect conflicts
+      // Fetch Google Calendar events
+      const googleToken = await getToken(userId, "google_calendar");
+      if (googleToken && !isTokenExpired(googleToken.expiresAt)) {
+        hasAnyConnection = true;
+        const googleEvents = await fetchGoogleCalendarEvents(
+          googleToken.accessToken,
+        );
+        events.push(...googleEvents);
+      }
 
+      // Fetch Outlook events
+      const outlookToken = await getToken(userId, "outlook");
+      if (outlookToken && !isTokenExpired(outlookToken.expiresAt)) {
+        hasAnyConnection = true;
+        const outlookEvents = await fetchOutlookCalendarEvents(
+          outlookToken.accessToken,
+        );
+        events.push(...outlookEvents);
+      }
+
+      // Sort by start time
       const sortedEvents = events.sort(
         (a, b) =>
           new Date(a.startTime).getTime() - new Date(b.startTime).getTime(),
@@ -59,7 +168,7 @@ export const calendarWidget: Widget = {
         fetchedAt: new Date(),
         data: {
           events: sortedEvents,
-          connected: true,
+          connected: hasAnyConnection,
           eventCount: sortedEvents.length,
           showTomorrow: config.showTomorrow ?? false,
         },
@@ -68,7 +177,7 @@ export const calendarWidget: Widget = {
       return {
         widgetId: "calendar",
         fetchedAt: new Date(),
-        data: { events: [], connected: true },
+        data: { events: [], connected: true, eventCount: 0 },
         error:
           error instanceof Error
             ? error.message

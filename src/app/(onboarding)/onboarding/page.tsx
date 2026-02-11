@@ -40,8 +40,27 @@ export default function OnboardingPage() {
     );
   };
 
+  const [saving, setSaving] = useState(false);
+
   const handleComplete = async () => {
-    // TODO: Save preferences to database via API
+    setSaving(true);
+    try {
+      await fetch("/api/user/onboarding", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          modules: selectedModules,
+          address,
+          newsCategories,
+          wakeTime,
+          emailEnabled,
+          pushEnabled,
+        }),
+      });
+    } catch {
+      // If save fails (e.g., no DB in demo mode), still navigate
+      console.warn("Could not save preferences — continuing to dashboard");
+    }
     router.push("/dashboard");
   };
 
@@ -91,8 +110,8 @@ export default function OnboardingPage() {
             {selectedModules.length !== 1 ? "s" : ""}
           </Button>
         ) : (
-          <Button onClick={handleComplete} size="lg">
-            This is my morning. Let&apos;s go!
+          <Button onClick={handleComplete} size="lg" disabled={saving}>
+            {saving ? "Setting up..." : "This is my morning. Let\u0027s go!"}
           </Button>
         )}
       </div>

@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
+import { eq } from "drizzle-orm";
 import { getStripeClient } from "@/lib/stripe/client";
+import { db } from "@/lib/db/client";
+import { users } from "@/lib/db/schema";
 
 export async function POST(req: Request) {
   const stripe = getStripeClient();
@@ -27,23 +30,75 @@ export async function POST(req: Request) {
 
   switch (event.type) {
     case "checkout.session.completed": {
-      // TODO: Upgrade user subscription tier in database
-      console.log("Checkout completed:", event.data.object.id);
+      const session = event.data.object;
+      const plan = (session.metadata?.plan as "pro" | "business") || "pro";
+      const customerId =
+        typeof session.customer === "string" ? session.customer : null;
+
+      if (customerId) {
+        await db
+          .update(users)
+          .set({
+            subscriptionTier: plan,
+            subscriptionStatus: "active",
+            updatedAt: new Date(),
+          })
+          .where(eq(users.stripeCustomerId, customerId));
+      }
       break;
     }
     case "customer.subscription.updated": {
-      // TODO: Sync subscription status
-      console.log("Subscription updated:", event.data.object.id);
+      const subscription = event.data.object;
+      const customerId =
+        typeof subscription.customer === "string"
+          ? subscription.customer
+          : null;
+
+      if (customerId) {
+        const status = subscription.status === "active" ? "active" : "past_due";
+        await db
+          .update(users)
+          .set({
+            subscriptionStatus: status,
+            updatedAt: new Date(),
+          })
+          .where(eq(users.stripeCustomerId, customerId));
+      }
       break;
     }
     case "customer.subscription.deleted": {
-      // TODO: Downgrade user to free
-      console.log("Subscription deleted:", event.data.object.id);
+      const subscription = event.data.object;
+      const customerId =
+        typeof subscription.customer === "string"
+          ? subscription.customer
+          : null;
+
+      if (customerId) {
+        await db
+          .update(users)
+          .set({
+            subscriptionTier: "free",
+            subscriptionStatus: "canceled",
+            updatedAt: new Date(),
+          })
+          .where(eq(users.stripeCustomerId, customerId));
+      }
       break;
     }
     case "invoice.payment_failed": {
-      // TODO: Set subscription status to past_due
-      console.log("Payment failed:", event.data.object.id);
+      const invoice = event.data.object;
+      const customerId =
+        typeof invoice.customer === "string" ? invoice.customer : null;
+
+      if (customerId) {
+        await db
+          .update(users)
+          .set({
+            subscriptionStatus: "past_due",
+            updatedAt: new Date(),
+          })
+          .where(eq(users.stripeCustomerId, customerId));
+      }
       break;
     }
   }
