@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/settings", label: "Settings", icon: Settings },
-  { href: "/settings", label: "Profile", icon: User },
+  { href: "/onboarding", label: "Setup", icon: User },
 ];
 
 export function MobileNav() {
