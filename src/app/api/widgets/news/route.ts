@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
 import { newsWidget } from "@/lib/widgets/news";
 import { newsQuerySchema } from "@/lib/validations";
+import { checkRateLimit } from "@/lib/redis/check-rate-limit";
 
 export async function GET(req: Request) {
+  const ip = req.headers.get("x-forwarded-for") ?? "anonymous";
+  const rateLimited = await checkRateLimit(`news:${ip}`);
+  if (rateLimited) return rateLimited;
+
   const { searchParams } = new URL(req.url);
   const parsed = newsQuerySchema.safeParse(Object.fromEntries(searchParams));
 

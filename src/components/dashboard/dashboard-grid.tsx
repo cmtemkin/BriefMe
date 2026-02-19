@@ -7,6 +7,7 @@ import { NewsCard } from "@/components/widgets/news-card";
 import { HealthCard } from "@/components/widgets/health-card";
 import { GamesCard } from "@/components/widgets/games-card";
 import { HistoryCard } from "@/components/widgets/history-card";
+import { RssCard } from "@/components/widgets/rss-card";
 import { WidgetSkeleton } from "@/components/widgets/widget-skeleton";
 
 const WIDGET_COMPONENTS: Record<
@@ -19,6 +20,7 @@ const WIDGET_COMPONENTS: Record<
   health: HealthCard,
   games: GamesCard,
   history: HistoryCard,
+  rss: RssCard,
 };
 
 interface DashboardGridProps {

@@ -6,7 +6,7 @@ Last updated: 2026-02-19
 
 BriefMe has a complete v1 foundation:
 
-- 6 widgets (weather, calendar, news, health, games, history)
+- 7 widgets (weather, calendar, news, health, games, history, RSS)
 - Full auth (Clerk), payments (Stripe), email (Postmark), push (FCM)
 - Dashboard, settings, onboarding, marketing/SEO pages
 - PWA support, caching (Upstash Redis), error monitoring (Sentry)
@@ -30,24 +30,24 @@ BriefMe has a complete v1 foundation:
 - [ ] Integration tests for API routes (with mocked DB/Redis)
 - [ ] E2E smoke tests for critical user flows (onboarding, dashboard load)
 
-## Phase 2: Data & Reliability (in progress)
+## Phase 2: Data & Reliability (done)
 
 - [ ] Add real database migrations (run `drizzle-kit generate` + `drizzle-kit migrate`)
 - [x] Add health checks endpoint (`GET /api/health` — checks DB + Redis)
 - [x] Implement retry logic for external API calls (`fetchWithRetry` with exponential backoff)
 - [x] Input validation on all API route handlers (Zod schemas on 8 routes)
 - [x] Server-side analytics tracking (PostHog HTTP API for onboarding + digest delivery)
+- [x] Rate limiting on public widget API routes (Upstash sliding window, per-IP)
 - [ ] Add structured logging (pino or similar)
-- [ ] Rate limiting on public API routes
 
-## Phase 3: Feature Gaps (defined in plan tiers but not yet built)
+## Phase 3: Feature Gaps (in progress)
 
-- [ ] **RSS Feed widget** — custom RSS/Atom feed aggregator (Pro tier)
+- [x] **RSS Feed widget** — custom RSS/Atom feed aggregator with XML parser (Pro tier)
 - [ ] **AI Summary** — LLM-generated digest summary across all widgets (Pro tier)
 - [ ] **Team Digest** — shared digest for teams/orgs with role-based access (Business tier)
 - [ ] **Public API** — RESTful API for programmatic digest access (Business tier)
-- [x] **Analytics module** — server-side PostHog tracking + client SDK integration (done)
-- [ ] **Analytics dashboard events** — wire client-side tracking into dashboard/settings UI
+- [x] **Analytics module** — server-side PostHog tracking + client SDK integration
+- [x] **Analytics dashboard events** — client-side tracking in settings (module toggle, save, upgrade)
 
 ## Phase 4: Polish & Growth
 

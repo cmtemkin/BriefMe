@@ -22,6 +22,7 @@ import {
   Heart,
   Gamepad2,
   BookOpen,
+  Rss,
   Mail,
   Bell,
   Globe,
@@ -31,6 +32,8 @@ import {
   Loader2,
   ExternalLink,
 } from "lucide-react";
+import { trackEvent, initPostHog } from "@/lib/analytics/posthog";
+import { EVENTS } from "@/lib/analytics/events";
 
 const MODULE_ICONS: Record<
   string,
@@ -42,6 +45,7 @@ const MODULE_ICONS: Record<
   health: Heart,
   games: Gamepad2,
   history: BookOpen,
+  rss: Rss,
 };
 
 const ALL_MODULES = [
@@ -51,6 +55,7 @@ const ALL_MODULES = [
   { id: "health", name: "Health & Wellness" },
   { id: "games", name: "Daily Games" },
   { id: "history", name: "This Day in History" },
+  { id: "rss", name: "RSS Feeds", tier: "pro" as const },
 ];
 
 const WAKE_TIMES = [
@@ -117,6 +122,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     setMounted(true);
+    initPostHog();
   }, []);
 
   // Load user preferences on mount
@@ -191,6 +197,14 @@ export default function SettingsPage() {
         }),
       });
       setSaved(true);
+      trackEvent(EVENTS.WIDGET_CONFIGURED, {
+        enabledModules: Object.entries(modules)
+          .filter(([, v]) => v)
+          .map(([k]) => k),
+        emailEnabled,
+        pushEnabled,
+        wakeTime,
+      });
       setTimeout(() => setSaved(false), 2000);
     } catch {
       // Silent fail in demo mode
@@ -200,7 +214,11 @@ export default function SettingsPage() {
   }, [modules, emailEnabled, pushEnabled, wakeTime, address]);
 
   const toggleModule = (id: string) => {
-    setModules((prev) => ({ ...prev, [id]: !prev[id] }));
+    const newState = !modules[id];
+    setModules((prev) => ({ ...prev, [id]: newState }));
+    trackEvent(newState ? EVENTS.MODULE_ENABLED : EVENTS.MODULE_DISABLED, {
+      moduleId: id,
+    });
   };
 
   const connectAccount = (provider: string) => {
@@ -224,6 +242,7 @@ export default function SettingsPage() {
   };
 
   const handleUpgrade = async () => {
+    trackEvent(EVENTS.UPGRADE_CLICKED, { plan: "pro" });
     try {
       const res = await fetch("/api/stripe/checkout", {
         method: "POST",

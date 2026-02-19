@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
 import { weatherWidget } from "@/lib/widgets/weather";
 import { weatherQuerySchema } from "@/lib/validations";
+import { checkRateLimit } from "@/lib/redis/check-rate-limit";
 
 export async function GET(req: Request) {
+  const ip = req.headers.get("x-forwarded-for") ?? "anonymous";
+  const rateLimited = await checkRateLimit(`weather:${ip}`);
+  if (rateLimited) return rateLimited;
+
   const { searchParams } = new URL(req.url);
   const parsed = weatherQuerySchema.safeParse(Object.fromEntries(searchParams));
 
