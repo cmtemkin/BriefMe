@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { users, deliveryPreferences } from "@/lib/db/schema";
+import { deliveryUpdateSchema } from "@/lib/validations";
 
 export async function GET() {
   const { userId: clerkId } = await auth();
@@ -49,8 +50,15 @@ export async function PUT(req: Request) {
   }
 
   try {
-    const body = await req.json();
-    const { emailEnabled, pushEnabled, wakeTime } = body;
+    const raw = await req.json();
+    const parsed = deliveryUpdateSchema.safeParse(raw);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Invalid payload", details: parsed.error.issues },
+        { status: 400 },
+      );
+    }
+    const { emailEnabled, pushEnabled, wakeTime } = parsed.data;
 
     const [user] = await db
       .select({ id: users.id })

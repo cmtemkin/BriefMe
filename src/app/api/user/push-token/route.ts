@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { users, deliveryPreferences } from "@/lib/db/schema";
+import { pushTokenSchema } from "@/lib/validations";
 
 export async function POST(req: Request) {
   const { userId: clerkId } = await auth();
@@ -11,12 +12,15 @@ export async function POST(req: Request) {
   }
 
   try {
-    const body = await req.json();
-    const { token } = body;
-
-    if (!token || typeof token !== "string") {
-      return NextResponse.json({ error: "Missing FCM token" }, { status: 400 });
+    const raw = await req.json();
+    const parsed = pushTokenSchema.safeParse(raw);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Invalid payload", details: parsed.error.issues },
+        { status: 400 },
+      );
     }
+    const { token } = parsed.data;
 
     const [user] = await db
       .select({ id: users.id })

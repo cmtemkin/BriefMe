@@ -3,15 +3,9 @@ import { auth } from "@clerk/nextjs/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { users, userModules, deliveryPreferences } from "@/lib/db/schema";
-
-interface OnboardingPayload {
-  modules: string[];
-  address?: string;
-  newsCategories?: string[];
-  wakeTime?: string;
-  emailEnabled?: boolean;
-  pushEnabled?: boolean;
-}
+import { onboardingSchema } from "@/lib/validations";
+import { trackServerEvent } from "@/lib/analytics/server";
+import { EVENTS } from "@/lib/analytics/events";
 
 export async function POST(req: Request) {
   const { userId: clerkId } = await auth();
@@ -19,7 +13,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body: OnboardingPayload = await req.json();
+  const raw = await req.json();
+  const parsed = onboardingSchema.safeParse(raw);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Invalid payload", details: parsed.error.issues },
+      { status: 400 },
+    );
+  }
+  const body = parsed.data;
 
   try {
     // Look up internal user
@@ -74,6 +76,13 @@ export async function POST(req: Request) {
           : undefined,
       })
       .where(eq(deliveryPreferences.userId, user.id));
+
+    trackServerEvent(clerkId, EVENTS.ONBOARDING_COMPLETED, {
+      modules: body.modules,
+      moduleCount: body.modules.length,
+      emailEnabled: body.emailEnabled ?? false,
+      pushEnabled: body.pushEnabled ?? false,
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -15,7 +15,7 @@ BriefMe has a complete v1 foundation:
 
 ---
 
-## Phase 1: Test Coverage & Stability (current)
+## Phase 1: Test Coverage & Stability (done)
 
 - [x] Fix production build (local fonts instead of Google Fonts)
 - [x] Unit tests for widget registry (register, get, filter by tier, defaults)
@@ -25,17 +25,20 @@ BriefMe has a complete v1 foundation:
 - [x] Unit tests for email subject line generator (rotation, truncation, fallback)
 - [x] Unit tests for games widget (pure data, no external API)
 - [x] Unit tests for weather/news/history notification rendering
+- [x] Unit tests for `fetchWithRetry` (retry, backoff, 4xx skip, timeout)
+- [x] Unit tests for Zod validation schemas (all 7 schemas, 23 tests)
 - [ ] Integration tests for API routes (with mocked DB/Redis)
 - [ ] E2E smoke tests for critical user flows (onboarding, dashboard load)
 
-## Phase 2: Data & Reliability
+## Phase 2: Data & Reliability (in progress)
 
 - [ ] Add real database migrations (run `drizzle-kit generate` + `drizzle-kit migrate`)
-- [ ] Add health checks endpoint (`GET /api/health`)
-- [ ] Implement retry logic for external API calls (weather, news, history)
+- [x] Add health checks endpoint (`GET /api/health` — checks DB + Redis)
+- [x] Implement retry logic for external API calls (`fetchWithRetry` with exponential backoff)
+- [x] Input validation on all API route handlers (Zod schemas on 8 routes)
+- [x] Server-side analytics tracking (PostHog HTTP API for onboarding + digest delivery)
 - [ ] Add structured logging (pino or similar)
 - [ ] Rate limiting on public API routes
-- [ ] Input validation on all API route handlers (Zod schemas)
 
 ## Phase 3: Feature Gaps (defined in plan tiers but not yet built)
 
@@ -43,7 +46,8 @@ BriefMe has a complete v1 foundation:
 - [ ] **AI Summary** — LLM-generated digest summary across all widgets (Pro tier)
 - [ ] **Team Digest** — shared digest for teams/orgs with role-based access (Business tier)
 - [ ] **Public API** — RESTful API for programmatic digest access (Business tier)
-- [ ] **Analytics module** — implement PostHog tracking events (scaffolding exists, no code)
+- [x] **Analytics module** — server-side PostHog tracking + client SDK integration (done)
+- [ ] **Analytics dashboard events** — wire client-side tracking into dashboard/settings UI
 
 ## Phase 4: Polish & Growth
 

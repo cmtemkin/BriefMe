@@ -5,6 +5,7 @@ import type {
   NotificationPayload,
 } from "./types";
 import { getCached, setCache } from "@/lib/redis/cache";
+import { fetchWithRetry } from "@/lib/fetch-retry";
 
 interface WikimediaEvent {
   text: string;
@@ -28,7 +29,7 @@ async function fetchOnThisDay(
   day: number,
 ): Promise<WikimediaResponse> {
   const url = `https://api.wikimedia.org/feed/v1/wikipedia/en/onthisday/all/${month}/${day}`;
-  const res = await fetch(url, {
+  const res = await fetchWithRetry(url, {
     headers: { "User-Agent": "BriefMe/1.0 (morning dashboard)" },
   });
   if (!res.ok) throw new Error(`Wikimedia API error: ${res.status}`);

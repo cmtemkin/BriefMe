@@ -1,14 +1,19 @@
 import { NextResponse } from "next/server";
 import { newsWidget } from "@/lib/widgets/news";
+import { newsQuerySchema } from "@/lib/validations";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
-  const categories = searchParams.get("categories")?.split(",") || [
-    "world",
-    "technology",
-    "business",
-  ];
-  const count = parseInt(searchParams.get("count") || "5", 10);
+  const parsed = newsQuerySchema.safeParse(Object.fromEntries(searchParams));
+
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Invalid parameters", details: parsed.error.issues },
+      { status: 400 },
+    );
+  }
+
+  const { categories, count } = parsed.data;
 
   try {
     const data = await newsWidget.fetchData({ categories, count });

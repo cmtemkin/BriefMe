@@ -5,6 +5,7 @@ import type {
   NotificationPayload,
 } from "./types";
 import { getCached, setCache } from "@/lib/redis/cache";
+import { fetchWithRetry } from "@/lib/fetch-retry";
 
 interface WeatherResponse {
   current: {
@@ -81,7 +82,7 @@ async function fetchWeatherData(
   url.searchParams.set("forecast_days", "1");
   url.searchParams.set("timezone", "auto");
 
-  const res = await fetch(url.toString());
+  const res = await fetchWithRetry(url.toString());
   if (!res.ok) throw new Error(`Weather API error: ${res.status}`);
   return res.json();
 }

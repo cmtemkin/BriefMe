@@ -8,6 +8,7 @@ import {
   deliveryPreferences,
   oauthTokens,
 } from "@/lib/db/schema";
+import { preferencesUpdateSchema } from "@/lib/validations";
 
 export async function GET() {
   const { userId: clerkId } = await auth();
@@ -89,8 +90,15 @@ export async function PUT(req: Request) {
   }
 
   try {
-    const body = await req.json();
-    const { modules, delivery, address } = body;
+    const raw = await req.json();
+    const parsed = preferencesUpdateSchema.safeParse(raw);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Invalid payload", details: parsed.error.issues },
+        { status: 400 },
+      );
+    }
+    const { modules, delivery, address } = parsed.data;
 
     const [user] = await db
       .select({ id: users.id })
@@ -103,12 +111,12 @@ export async function PUT(req: Request) {
     }
 
     // Update modules
-    if (modules && typeof modules === "object") {
+    if (modules) {
       // Delete existing modules
       await db.delete(userModules).where(eq(userModules.userId, user.id));
 
       // Insert updated modules
-      const moduleEntries = Object.entries(modules as Record<string, boolean>);
+      const moduleEntries = Object.entries(modules);
       if (moduleEntries.length > 0) {
         await db.insert(userModules).values(
           moduleEntries.map(([moduleId, enabled], index) => ({
@@ -143,7 +151,7 @@ export async function PUT(req: Request) {
     const userUpdates: Record<string, unknown> = {
       updatedAt: new Date(),
     };
-    if (typeof address === "string") {
+    if (address !== undefined) {
       userUpdates.address = address;
     }
     if (delivery?.wakeTime) {

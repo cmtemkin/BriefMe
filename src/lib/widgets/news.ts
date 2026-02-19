@@ -5,6 +5,7 @@ import type {
   NotificationPayload,
 } from "./types";
 import { getCached, setCache } from "@/lib/redis/cache";
+import { fetchWithRetry } from "@/lib/fetch-retry";
 
 interface GuardianArticle {
   webTitle: string;
@@ -39,7 +40,7 @@ async function fetchGuardianNews(
   url.searchParams.set("order-by", "newest");
   if (section) url.searchParams.set("section", section);
 
-  const res = await fetch(url.toString());
+  const res = await fetchWithRetry(url.toString());
   if (!res.ok) throw new Error(`Guardian API error: ${res.status}`);
 
   const data: GuardianResponse = await res.json();

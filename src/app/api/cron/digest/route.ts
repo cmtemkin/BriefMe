@@ -13,6 +13,7 @@ import { sendEmail } from "@/lib/email/send";
 import { renderDigestHtml, renderDigestText } from "@/lib/email/render";
 import { generateSubjectLine } from "@/lib/email/subjects";
 import { sendPushNotification } from "@/lib/notifications/fcm";
+import { trackServerEvent } from "@/lib/analytics/server";
 
 export async function GET(req: Request) {
   // Verify cron secret
@@ -147,6 +148,12 @@ export async function GET(req: Request) {
             channel === "email" ? `Morning digest for ${firstName}` : null,
         });
       }
+
+      trackServerEvent(user.id, "digest_delivered", {
+        channels: channelsDelivered,
+        moduleCount: enabledModuleIds.length,
+        modules: enabledModuleIds,
+      });
 
       processed++;
     }
